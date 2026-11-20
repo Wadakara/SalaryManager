@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Salary Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--bg:#f4f1ff;--cd:#fff;--tx:#1e1b3a;--mu:#6b6890;--bd:#e4e0fa;--bad:#e11d48;--ok:#059669}
+@media(prefers-color-scheme:dark){:root{--bg:#120f24;--cd:#1c1836;--tx:#ece9ff;--mu:#a5a0cf;--bd:#322d5a;--bad:#fb7185;--ok:#34d399}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,sans-serif}
+header{padding:14px 16px;background:linear-gradient(120deg,#6366f1,#ec4899 55%,#f59e0b);color:#fff;position:sticky;top:0;z-index:5}
+header h1{margin:0 0 8px;font-size:19px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#st{font-size:11px;font-weight:400;background:#0003;padding:2px 9px;border-radius:12px}
+nav{display:flex;gap:6px;flex-wrap:wrap}nav button{border:0;background:#fff3;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer}nav button.on{background:#fff;color:#6366f1;font-weight:600}
+main{max-width:1060px;margin:0 auto;padding:16px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mu);gap:3px}
+input,select{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 9px;font:inherit;min-width:0}
+input[type=number]{width:120px}
+.btn{background:linear-gradient(120deg,#6366f1,#ec4899);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font:inherit}.btn.g{background:none;color:var(--tx);border:1px solid var(--bd)}
+.x{background:none;border:0;color:var(--bad);cursor:pointer;font-size:18px}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{padding:6px 7px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}th{font-size:12px;color:var(--mu)}
+.n{text-align:right}tfoot td{font-weight:700;border:0}.ok{color:var(--ok)}.bad{color:var(--bad)}.mu{color:var(--mu)}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.k{border-radius:12px;padding:11px;color:#fff}.k b{display:block;font-size:17px}.k span{opacity:.85;font-size:12px}
+.k:nth-child(4n+1){background:linear-gradient(135deg,#6366f1,#8b5cf6)}.k:nth-child(4n+2){background:linear-gradient(135deg,#ec4899,#f43f5e)}.k:nth-child(4n+3){background:linear-gradient(135deg,#f59e0b,#f97316)}.k:nth-child(4n){background:linear-gradient(135deg,#10b981,#06b6d4)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.ch{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+</style></head><body>
+<header><h1>My Salary Manager <span id="st">Local only</span></h1><nav id="nav"></nav></header><main id="app"></main>
+<script>
+const KEY='salaryManagerV1',CFG='salaryMgrSB',PAL=['#6366f1','#ec4899','#f59e0b','#10b981','#06b6d4','#8b5cf6','#ef4444','#84cc16','#f97316','#14b8a6'];
+const $=s=>document.querySelector(s),uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const DEF=()=>({cats:[['Loan repayments',25,'loans'],['Household and food',20],['House construction',15],['Investments',10,'inv'],['Savings / emergency',10],['Family and education',8],['Transport and utilities',7],['Personal / misc',5]].map(([name,pct,link])=>({id:uid(),name,pct,link:link||''})),months:{},inv:[],loans:[]});
+let S;try{S=JSON.parse(localStorage.getItem(KEY))||DEF()}catch(e){S=DEF()}
+const norm=()=>{S.inv=S.inv||[];S.loans=S.loans||[];S.months=S.months||{}};norm();
+let tab='salary',month=new Date().toISOString().slice(0,7),sb=null,user=null,tm;
+const stat=t=>$('#st').textContent=t;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(user){clearTimeout(tm);tm=setTimeout(push,800)}}
+function sbInit(){try{const c=JSON.parse(localStorage.getItem(CFG)||'null');if(c&&c.url&&window.supabase)sb=supabase.createClient(c.url,c.key)}catch(e){}}
+async function push(){if(!user)return;const{error}=await sb.from('app_state').upsert({user_id:user.id,data:S,updated_at:new Date().toISOString()});stat(error?'Sync failed':'Synced '+new Date().toLocaleTimeString())}
+async function pull(manual){const{data,error}=await sb.from('app_state').select('data').eq('user_id',user.id).maybeSingle();
+ if(error)return alert(error.message);
+ if(data&&data.data&&data.data.cats){if(manual&&!confirm('Replace this device data with the cloud copy?'))return;S=data.data;norm();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}stat('Synced');go(tab)}else await push()}
+async function auth(k){if(!sb)return alert('Save the Supabase URL and key first.');
+ if(k==='out'){await sb.auth.signOut();user=null;stat('Local only');return rSync()}
+ const e=$('#se').value,p=$('#sp').value;const r=k==='in'?await sb.auth.signInWithPassword({email:e,password:p}):await sb.auth.signUp({email:e,password:p});
+ if(r.error)return alert(r.error.message);if(!r.data.session)return alert('Check your email to confirm, then log in.');
+ user=r.data.user;await pull();rSync()}
+function saveCfg(){localStorage.setItem(CFG,JSON.stringify({url:$('#su').value.trim(),key:$('#sk').value.trim()}));sbInit();alert('Saved. Now log in or sign up.')}
+const tabs=[['salary','Salary'],['ins','Insights'],['inv','Investments'],['loans','Loans'],['sync','Sync and backup']];
+function go(t){tab=t;$('#nav').innerHTML=tabs.map(([k,l])=>`<button class="${k===t?'on':''}" onclick="go('${k}')">${l}</button>`).join('');({salary:rSalary,ins:rIns,inv:rInv,loans:rLoans,sync:rSync})[t]()}
+const getM=m=>{const M=S.months[m]||(S.months[m]={salary:0,rounded:{}});M.il=M.il||{};return M};
+function donut(it,mid){const t=it.reduce((a,b)=>a+b.v,0)||1;let o=25;return `<svg viewBox="0 0 42 42" width="190" height="190"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--bd)" stroke-width="6"/>${it.map(x=>{const p=x.v/t*100,s=`<circle cx="21" cy="21" r="15.9155" fill="none" stroke="${x.c}" stroke-width="6" stroke-dasharray="${p} ${100-p}" stroke-dashoffset="${o}"/>`;o-=p;return s}).join('')}<text x="21" y="22" text-anchor="middle" font-size="3" fill="var(--tx)">${mid}</text></svg>`}
+const legend=it=>`<div>${it.map(x=>`<div><i class="dot" style="background:${x.c}"></i>${esc(x.n)} <span class="mu">${fmt(x.v)}</span></div>`).join('')}</div>`;
+
+/* ---- Loans engine (fixed rate, EMI recalculated after lump sums) ---- */
+const calc=(b,r,n)=>n<=0?b:r?b*r/(1-Math.pow(1+r,-n)):b/n;
+function mdiff(a,b){const s=new Date(a),t=new Date(b);let k=(t.getFullYear()-s.getFullYear())*12+t.getMonth()-s.getMonth();if(t.getDate()<s.getDate())k--;return Math.max(0,k)}
+function sched(l,noPre){const r=l.rate/1200,n=+l.months;let b=+l.principal,emi=calc(b,r,n),rows=[],pp={},tot=0;
+ if(!noPre)(l.pre||[]).forEach(p=>{const k=Math.min(n,mdiff(l.start,p.date));pp[k]=(pp[k]||0)+ +p.amt});
+ for(let i=1;i<=n;i++){const k=i-1;if(pp[k]){b=Math.max(0,b-pp[k]);emi=calc(b,r,n-k)}if(b<=0.005)break;
+  const it=b*r;let pr=emi-it;if(i===n||pr>b)pr=b;const s0=b;b-=pr;tot+=it;rows.push({i,pay:pr+it,it,pr,b:Math.max(b,0),s0,emi,lump:pp[k]||0})}
+ return{rows,tot}}
+const paid=l=>Math.min(+l.months,mdiff(l.start,new Date()));
+const dueEMI=()=>S.loans.reduce((a,l)=>{const r=sched(l).rows[paid(l)];return a+(r?r.emi:0)},0);
+
+/* ---- Salary ---- */
+function rSalary(){const M=getM(month);
+ $('#app').innerHTML=`<div class="card"><div class="row"><label>Month<input type="month" value="${month}" onchange="month=this.value;rSalary()"></label>
+ <label>Salary received (LKR)<input type="number" value="${M.salary||''}" oninput="getM(month).salary=+this.value||0;save();upd()"></label></div></div>
+ <div class="kp" id="kp"></div>
+ <div class="card"><div class="sc"><table><thead><tr><th>Category</th><th>Link</th><th>Target %</th><th class="n">Exact</th><th>Rounded (you enter)</th><th class="n">Actual %</th><th class="n">Diff</th><th>Check</th><th></th></tr></thead><tbody>
+ ${S.cats.map((c,i)=>`<tr><td><i class="dot" style="background:${PAL[i%10]}"></i><input type="text" value="${esc(c.name)}" style="width:150px" onchange="cat('${c.id}','name',this.value)"></td>
+ <td><select onchange="cat('${c.id}','link',this.value);upd()">${[['','None'],['loans','Loans'],['inv','Invest']].map(([v,l])=>`<option value="${v}"${(c.link||'')===v?' selected':''}>${l}</option>`).join('')}</select></td>
+ <td><input type="number" step="0.1" style="width:70px" value="${c.pct}" oninput="cat('${c.id}','pct',+this.value||0);upd()"></td>
+ <td class="n" id="e_${c.id}"></td><td><input type="number" id="r_${c.id}" value="${M.rounded[c.id]??''}" oninput="setR('${c.id}',this.value)"></td>
+ <td class="n mu" id="a_${c.id}"></td><td class="n mu" id="d_${c.id}"></td><td id="c_${c.id}"></td><td><button class="x" onclick="delCat('${c.id}')">×</button></td></tr>`).join('')}
+ </tbody><tfoot><tr><td>Total</td><td></td><td id="tp"></td><td class="n" id="te"></td><td id="tr"></td><td class="n" id="ta"></td><td></td><td></td><td></td></tr></tfoot></table></div>
+ <p class="row" style="margin:12px 0 0"><button class="btn g" onclick="S.cats.push({id:uid(),name:'New category',pct:0,link:''});save();rSalary()">+ Category</button>
+ <button class="btn g" onclick="fillR()">Fill empty cells with suggested rounding (nearest 500)</button></p></div>
+ <div class="card ch" id="dn"></div>`;upd()}
+function cat(id,k,v){S.cats.find(c=>c.id===id)[k]=v;save()}
+function setR(id,v){const M=getM(month);v===''?delete M.rounded[id]:M.rounded[id]=+v;save();upd()}
+function delCat(id){if(confirm('Remove this category?')){S.cats=S.cats.filter(c=>c.id!==id);save();rSalary()}}
+function fillR(){const M=getM(month);S.cats.forEach(c=>{if(M.rounded[c.id]==null)M.rounded[c.id]=Math.round(M.salary*c.pct/100/500)*500});save();rSalary()}
+function toInv(id){const M=getM(month),c=S.cats.find(x=>x.id===id),a=M.rounded[id];if(!a)return;const n=prompt('Investment name',c.name+' '+month);if(!n)return;
+ const iid=uid();S.inv.push({id:iid,name:n,type:'Monthly allocation',cost:a,val:a,date:month+'-01'});M.il[id]=iid;save();upd()}
+function upd(){const M=getM(month),sal=M.salary;let pc=0,ex=0,ro=0,ra=0;const due=dueEMI(),items=[];
+ const any=S.cats.some(c=>M.rounded[c.id]!=null);
+ S.cats.forEach((c,i)=>{const e=sal*c.pct/100,r=M.rounded[c.id];pc+=c.pct;ex+=e;
+  $('#e_'+c.id).textContent=fmt(e);$('#r_'+c.id).placeholder=fmt(Math.round(e/500)*500).replace(/\.00$/,'');
+  const ap=r!=null&&sal?r/sal*100:null;if(r!=null){ro+=r;if(ap!=null)ra+=ap}
+  $('#a_'+c.id).textContent=ap==null?'':ap.toFixed(2)+'%';$('#d_'+c.id).textContent=r==null?'':(r-e>=0?'+':'')+fmt(r-e);
+  let ck='';if(c.link==='loans')ck=!due?'<span class="mu">No active loans</span>':r==null?`<span class="mu">Due ${fmt(due)}</span>`:r>=due-0.005?`<span class="ok">✓ covers ${fmt(due)}</span>`:`<span class="bad">Short ${fmt(due-r)} (due ${fmt(due)})</span>`;
+  if(c.link==='inv')ck=M.il[c.id]?'<span class="ok">✓ in Investments</span>':r?`<button class="btn g" onclick="toInv('${c.id}')">+ Investments</button>`:'';
+  $('#c_'+c.id).innerHTML=ck;items.push({n:c.name,v:any?(r||0):e,c:PAL[i%10]})});
+ $('#tp').innerHTML=`<span class="${Math.abs(pc-100)<.001?'ok':'bad'}">${+pc.toFixed(2)}%</span>`;$('#te').textContent=fmt(ex);$('#tr').textContent=fmt(ro);$('#ta').textContent=ra.toFixed(2)+'%';
+ $('#kp').innerHTML=`<div class="k"><span>Salary</span><b>${fmt(sal)}</b></div><div class="k"><span>Allocated (rounded)</span><b>${fmt(ro)}</b></div><div class="k"><span>${sal-ro<0?'Over-allocated':'Unallocated'}</span><b>${fmt(Math.abs(sal-ro))}</b></div><div class="k"><span>Targets total</span><b>${+pc.toFixed(2)}%${Math.abs(pc-100)<.001?'':' (not 100)'}</b></div>`;
+ $('#dn').innerHTML=donut(items,any?'Your amounts':'Exact split')+legend(items)}
+
+/* ---- Insights ---- */
+function rIns(){const ms=Object.keys(S.months).sort().map(k=>{const M=S.months[k],any=S.cats.some(c=>M.rounded[c.id]!=null);return{k,sal:M.salary,seg:S.cats.map(c=>any?(M.rounded[c.id]||0):M.salary*c.pct/100)}}).filter(m=>m.sal>0);
+ const W=Math.max(320,ms.length*60),H=220,mx=Math.max(1,...ms.map(m=>Math.max(m.sal,m.seg.reduce((a,b)=>a+b,0))));
+ const svg=`<svg viewBox="0 0 ${W} ${H+20}" width="${W}" height="${H+20}">${ms.map((m,i)=>{let y=H;const x=i*60+10;
+  const s=m.seg.map((v,j)=>{const h=v/mx*(H-10);y-=h;return `<rect x="${x}" y="${y}" width="36" height="${h}" fill="${PAL[j%10]}"/>`}).join('');const sy=H-m.sal/mx*(H-10);
+  return s+`<line x1="${x-4}" x2="${x+40}" y1="${sy}" y2="${sy}" stroke="var(--tx)" stroke-dasharray="3"/><text x="${x+18}" y="${H+14}" text-anchor="middle" font-size="10" fill="var(--mu)">${m.k.slice(2)}</text>`}).join('')}</svg>`;
+ $('#app').innerHTML=`<div class="card"><h3 style="margin-top:0">Monthly allocation by category</h3><p class="mu">Bars show your rounded amounts (or the exact split if none entered). The dashed line is that month salary.</p>
+ ${ms.length?`<div class="sc">${svg}</div><div class="ch" style="margin-top:8px">${S.cats.map((c,i)=>`<span><i class="dot" style="background:${PAL[i%10]}"></i>${esc(c.name)}</span>`).join('')}</div>`:'<p class="mu">Enter a salary on the Salary tab to see the chart.</p>'}</div>`}
+
+/* ---- Investments ---- */
+function rInv(){const t=S.inv.reduce((a,i)=>({c:a.c+ +i.cost,v:a.v+ +i.val}),{c:0,v:0}),by={};S.inv.forEach(i=>by[i.type]=(by[i.type]||0)+ +i.val);
+ const it=Object.entries(by).map(([n,v],i)=>({n,v,c:PAL[i%10]}));
+ $('#app').innerHTML=`<div class="card"><div class="row"><label>Name<input id="in"></label>
+ <label>Type<select id="it">${['Monthly allocation','Fixed deposit','Treasury bill/bond','Unit trust','Shares','Gold','Land / property','Other'].map(x=>`<option>${x}</option>`).join('')}</select></label>
+ <label>Invested<input type="number" id="ic"></label><label>Current value<input type="number" id="iv"></label><label>Date<input type="date" id="id" value="${new Date().toISOString().slice(0,10)}"></label>
+ <button class="btn" onclick="addInv()">Add</button></div></div>
+ <div class="kp"><div class="k"><span>Invested</span><b>${fmt(t.c)}</b></div><div class="k"><span>Current value</span><b>${fmt(t.v)}</b></div><div class="k"><span>Gain / loss</span><b>${fmt(t.v-t.c)} (${t.c?((t.v/t.c-1)*100).toFixed(1):0}%)</b></div></div>
+ ${it.length?`<div class="card ch">${donut(it,'By type')}${legend(it)}</div>`:''}
+ <div class="card sc"><table><thead><tr><th>Name</th><th>Type</th><th>Date</th><th class="n">Invested</th><th>Current value</th><th class="n">Gain</th><th></th></tr></thead><tbody>
+ ${S.inv.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.type)}</td><td>${esc(i.date)}</td><td class="n">${fmt(i.cost)}</td><td><input type="number" value="${i.val}" onchange="S.inv.find(x=>x.id==='${i.id}').val=+this.value||0;save();rInv()"></td><td class="n ${i.val>=i.cost?'ok':'bad'}">${fmt(i.val-i.cost)}</td><td><button class="x" onclick="if(confirm('Delete?')){S.inv=S.inv.filter(x=>x.id!=='${i.id}');save();rInv()}">×</button></td></tr>`).join('')||'<tr><td class="mu">No investments yet.</td></tr>'}</tbody></table></div>`}
+function addInv(){const n=$('#in').value.trim(),c=+$('#ic').value;if(!n||!c)return alert('Enter a name and amount.');S.inv.push({id:uid(),name:n,type:$('#it').value,cost:c,val:+$('#iv').value||c,date:$('#id').value});save();rInv()}
+
+/* ---- Loans ---- */
+function rLoans(){$('#app').innerHTML=`<div class="card"><div class="row"><label>Loan name<input id="ln"></label><label>Principal<input type="number" id="lp"></label><label>Annual rate %<input type="number" step="0.01" id="lr"></label><label>Term (months)<input type="number" id="lm"></label><label>Start date<input type="date" id="ls"></label><button class="btn" onclick="addLoan()">Add loan</button></div>
+ <p class="mu" style="margin:10px 0 0">Fixed rate, reducing balance. A lump sum recalculates the EMI over the remaining term. Instalment 1 falls one month after the start date.</p></div>
+ ${S.loans.map(l=>{const s=sched(l),b=sched(l,1),k=paid(l),cur=s.rows[k],l0=(l.pre||[]);
+ return `<div class="card"><div class="row" style="justify-content:space-between"><b>${esc(l.name)}</b><button class="x" onclick="if(confirm('Delete loan?')){S.loans=S.loans.filter(x=>x.id!=='${l.id}');save();rLoans()}">×</button></div>
+ <div class="kp" style="margin-top:8px"><div class="k"><span>Current EMI</span><b>${fmt(cur?cur.emi:0)}</b></div><div class="k"><span>Outstanding now</span><b>${fmt(cur?cur.s0:0)}</b></div><div class="k"><span>Paid</span><b>${k} of ${s.rows.length||l.months}</b></div><div class="k"><span>Interest saved by lump sums</span><b>${fmt(b.tot-s.tot)}</b></div></div>
+ <div class="row"><label>Lump sum date<input type="date" id="pd_${l.id}"></label><label>Amount<input type="number" id="pa_${l.id}"></label><button class="btn g" onclick="addPre('${l.id}')">+ Lump sum</button>
+ ${l0.map((p,i)=>`<span class="mu">${esc(p.date)}: ${fmt(p.amt)} <button class="x" style="font-size:14px" onclick="S.loans.find(x=>x.id==='${l.id}').pre.splice(${i},1);save();rLoans()">×</button></span>`).join('')}</div>
+ <details><summary class="mu" style="cursor:pointer;margin-top:8px">Repayment schedule</summary><div class="sc"><table><thead><tr><th>#</th><th class="n">EMI</th><th class="n">Interest</th><th class="n">Principal</th><th class="n">Balance</th></tr></thead><tbody>
+ ${s.rows.map(r=>`<tr class="${r.i<=k?'mu':''}"><td>${r.i}${r.lump?' ★':''}</td><td class="n">${fmt(r.pay)}</td><td class="n">${fmt(r.it)}</td><td class="n">${fmt(r.pr)}</td><td class="n">${fmt(r.b)}</td></tr>`).join('')}</tbody></table></div><p class="mu">★ a lump sum was applied before this instalment.</p></details></div>`}).join('')||'<p class="mu">No loans yet.</p>'}`}
+function addLoan(){const n=$('#ln').value.trim(),p=+$('#lp').value,m=+$('#lm').value,s=$('#ls').value;if(!n||!p||!m||!s)return alert('Fill in all fields.');S.loans.push({id:uid(),name:n,principal:p,rate:+$('#lr').value||0,months:m,start:s,pre:[]});save();rLoans()}
+function addPre(id){const d=$('#pd_'+id).value,a=+$('#pa_'+id).value;if(!d||!a)return alert('Enter date and amount.');const l=S.loans.find(x=>x.id===id);(l.pre=l.pre||[]).push({date:d,amt:a});save();rLoans()}
+
+/* ---- Sync and backup ---- */
+function rSync(){const c=JSON.parse(localStorage.getItem(CFG)||'{}');
+ $('#app').innerHTML=`<div class="card"><h3 style="margin-top:0">Cloud sync (Supabase)</h3><p class="mu">Paste your Supabase project URL and anon key (kept only in this browser), then sign in on each device.</p>
+ <div class="row"><label>Project URL<input id="su" style="width:250px" value="${esc(c.url)}"></label><label>Anon key<input id="sk" style="width:250px" value="${esc(c.key)}"></label><button class="btn g" onclick="saveCfg()">Save</button></div>
+ <div class="row" style="margin-top:12px"><label>Email<input id="se" type="email"></label><label>Password<input id="sp" type="password"></label><button class="btn" onclick="auth('in')">Log in</button><button class="btn g" onclick="auth('up')">Sign up</button><button class="btn g" onclick="auth('out')">Log out</button></div>
+ <p class="mu">${user?'Logged in as '+esc(user.email):'Not logged in'}</p>
+ <div class="row"><button class="btn g" onclick="user?pull(1):alert('Log in first')">Pull from cloud</button><button class="btn g" onclick="user?push():alert('Log in first')">Push now</button></div></div>
+ <div class="card"><h3 style="margin-top:0">Backup</h3><div class="row"><button class="btn" onclick="exp()">Export JSON</button><label>Import<input type="file" accept=".json" onchange="imp(this.files[0])"></label>
+ <button class="btn g" onclick="if(confirm('Erase ALL data on this device?')){S=DEF();save();go('salary')}">Reset</button></div></div>`}
+function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='salary-manager-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
+function imp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.cats||!d.months)throw 0;S=d;norm();save();go('salary')}catch(e){alert('Not a valid backup file.')}};r.readAsText(f)}
+
+sbInit();go('salary');
+if(sb)sb.auth.getSession().then(async({data})=>{if(data.session){user=data.session.user;await pull()}}).catch(()=>{});
+</script></body></html>
